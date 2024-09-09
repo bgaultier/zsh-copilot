@@ -40,8 +40,6 @@ else
 fi
 
 function _suggest_ai() {
-    local OPENAI_API_URL=${OPENAI_API_URL:-"api.openai.com"}
-
     if [[ "$ZSH_COPILOT_SEND_CONTEXT" == 'true' ]]; then
         local PROMPT="$SYSTEM_PROMPT 
             Context: You are user $(whoami) with id $(id) in directory $(pwd). 
@@ -53,51 +51,43 @@ function _suggest_ai() {
     input=$(echo "$input" | sed 's/"/\\"/g')
 
     _zsh_autosuggest_clear
-    zle -R "Thinking..."
+    zle -R "Laisse moi réfléchir, humain..."
 
     PROMPT=$(echo "$PROMPT" | tr -d '\n')
-    # Wasn't able to get this to work :(
-    # if [[ "$ZSH_COPILOT_SEND_GIT_DIFF" == 'true' ]]; then
-    #     if [[ $(git rev-parse --is-inside-work-tree) == 'true' ]]; then
-    #         local git_diff=$(git diff --staged --no-color)
-    #         local git_exit_code=$?
-    #         git_diff=$(echo "$git_diff" | tr '\\' ' ' | sed 's/[\$\"\`]/\\&/g' | tr '\\' '\\\\' | tr -d '\n')
-    #
-    #         if [[ git_exit_code -eq 0 ]]; then
-    #             PROMPT="$PROMPT; This is the git diff: <---->$git_diff<----> You may provide a git commit message if the user is trying to commit changes. You are an expert at committing changes, you don't give generic messages. You give the best commit messages"
-    #         fi
-    #     fi
-    # fi
 
-    local data="{
-            \"model\": \"gpt-4\",
-            \"messages\": [
-                {
-                    \"role\": \"system\",
-                    \"content\": \"$PROMPT\"
-                },
-                {
-                    \"role\": \"user\",
-                    \"content\": \"$input\"
-                }
-            ]
-        }"
-    local response=$(curl "https://${OPENAI_API_URL}/v1/chat/completions" \
-        --silent \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer $OPENAI_API_KEY" \
-        -d $data)
-    local message=$(echo "$response" | jq -r '.choices[0].message.content')
+    echo "$PROMPT" > prompt.txt
+    echo "Finally, here is the user's input: $input" >> prompt.txt
 
+    # local data="{
+    #         \"model\": \"gpt-4\",
+    #         \"messages\": [
+    #             {
+    #                 \"role\": \"system\",
+    #                 \"content\": \"$PROMPT\"
+    #             },
+    #             {
+    #                 \"role\": \"user\",
+    #                 \"content\": \"$input\"
+    #             }
+    #         ]
+    #     }"
+    # local response=$(curl "https://${OPENAI_API_URL}/v1/chat/completions" \
+    #     --silent \
+    #     -H "Content-Type: application/json" \
+    #     -H "Authorization: Bearer $OPENAI_API_KEY" \
+    #     -d $data)
+    # local message=$(echo "$response" | jq -r '.choices[0].message.content')
+
+    
     # zle -U "$suggestion"
+    python3.10 ~/.zsh-copilot/hf_predict.py
+    message=$( < ~/.zsh-copilot/result.txt)
 
     local first_char=${message:0:1}
     local suggestion=${message:1:${#message}}
     
-    if [[ "$ZSH_COPILOT_DEBUG" == 'true' ]]; then
-        touch /tmp/zsh-copilot.log
-        echo "$(date);INPUT:$input;RESPONSE:$response;FIRST_CHAR:$first_char;SUGGESTION:$suggestion:DATA:$data" >> /tmp/zsh-copilot.log
-    fi
+    touch /tmp/zsh-copilot.log
+    echo "$(date);INPUT:$input;RESPONSE:$response;FIRST_CHAR:$first_char;SUGGESTION:$suggestion:DATA:$data" >> /tmp/zsh-copilot.log
 
     if [[ "$first_char" == '=' ]]; then
         # Reset user input
